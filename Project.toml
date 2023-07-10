@@ -1,0 +1,13 @@
+name = "MealModel"
+uuid = "669c76bc-767f-4084-a0ab-e2cae41b1e42"
+authors = ["Max de Rooij"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
