@@ -8,3 +8,4 @@ temp/*
 *Manifest.toml*
 
 Manifest.toml
+.DS_Store
