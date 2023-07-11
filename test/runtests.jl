@@ -28,7 +28,12 @@ function plot_output()
         pl = plot(outputs.time, outputs[key], title=string(key), titlefontsize=6)
         push!(plot_collection, pl)
     end
-    savefig(plot(plot_collection...), joinpath(figure_store, "test_plot.png"))
+
+    try
+        savefig(plot(plot_collection...), joinpath(figure_store, "test_plot.png"))
+    catch
+        println("Figure couldn't be saved, but plotting went well.")
+    end
 
     true
 end
