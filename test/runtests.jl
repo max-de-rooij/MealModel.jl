@@ -19,24 +19,25 @@ function run_model_simulation()
     true
 end
 
-function plot_output()
+# local test to check if plots make sense. not used anymore
+# function plot_output()
 
-    model = MixedMealModel()
-    outputs = output(model)
-    plot_collection = []
-    for key in keys(outputs)[2:end] # skip the time key
-        pl = plot(outputs.time, outputs[key], title=string(key), titlefontsize=6)
-        push!(plot_collection, pl)
-    end
+#     model = MixedMealModel()
+#     outputs = output(model)
+#     plot_collection = []
+#     for key in keys(outputs)[2:end] # skip the time key
+#         pl = plot(outputs.time, outputs[key], title=string(key), titlefontsize=6)
+#         push!(plot_collection, pl)
+#     end
 
-    try
-        savefig(plot(plot_collection...), joinpath(figure_store, "test_plot.png"))
-    catch
-        println("Figure couldn't be saved, but plotting went well.")
-    end
+#     try
+#         savefig(plot(plot_collection...), joinpath(figure_store, "test_plot.png"))
+#     catch
+#         println("Figure couldn't be saved, but plotting went well.")
+#     end
 
-    true
-end
+#     true
+# end
         
 
 
@@ -44,5 +45,4 @@ end
 @testset "MealModel.jl" begin
     @test define_model()
     @test run_model_simulation()
-    @test plot_output()
 end
