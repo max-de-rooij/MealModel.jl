@@ -1,7 +1,3 @@
-
-
-
-
 module MealModel
 using OrdinaryDiffEq, SciMLBase
 
@@ -13,8 +9,6 @@ export MixedMealModel
 
 # simulation functions
 export predict, output
-
-# Write your package code here.
 
 end
 

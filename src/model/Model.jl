@@ -1,43 +1,13 @@
 include("Equations.jl")
+include("Parameters.jl")
+using Random
 
-# default parameters
-function parameters(
-  fasting_glucose, 
-  fasting_insulin, 
-  meal_glucose_mass, 
-  meal_tg_mass, 
-  subject_body_mass; 
-  k1 = 0.0105, 
-  k2 = 0.28, 
-  k3 = 6.07e-3,
-  k4 = 2.35e-4,
-  k5 = 0.0424,
-  k6 = 2.2975,
-  k7 = 1.15,
-  k8 = 7.27,
-  k9 = 3.83e-2,
-  k10 = 2.84e-1,
-  sigma = 1.4,
-  Km = 13.2,
-  G_b = fasting_glucose,
-  I_pl_b = fasting_insulin,
-  G_liv_b = 0.043,
-  spill = 30, 
-  k11 = 0.00045, 
-  ATL_max = 0.215, 
-  K_ATL = 0.2, 
-  k12 = 0.0713, 
-  tau_LPL = 208.88, 
-  k13 = 0.0088, 
-  k14 = 0.0163, 
-  k15 = 1e-5, 
-  k16 = 0.0119
-  )
-
-  return [
-    k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, sigma, Km, G_b, I_pl_b, G_liv_b, spill, k11, ATL_max, K_ATL, k12, tau_LPL, k13, k14, k15, k16, meal_glucose_mass, meal_tg_mass, subject_body_mass
-  ]
+struct MixedMealModel{T<:Union{ODEProblem, EnsembleProblem}}
+  prob::T
+  trajectories::Int
 end
+
+MixedMealModel(prob::ODEProblem) = MixedMealModel(prob, 1)
 
 # single-subject
 function MixedMealModel(
@@ -56,13 +26,10 @@ function MixedMealModel(
 
   p = parameters(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg_mass, subject_body_mass)
 
-  ODEProblem{true, SciMLBase.FullSpecialize}(
+  return MixedMealModel(ODEProblem{true, SciMLBase.FullSpecialize}(
     system(), u0, timespan, p
-  )
+  ))
 end
-
-MixedMealModel() = MixedMealModel(75000., 60000., 75., 5.0, 18.0, 1.3, 0.33)
-
 
 function MixedMealModel(
   meal_glucose_mass::T,
@@ -94,5 +61,28 @@ function MixedMealModel(
     end
   end
 
-  EnsembleProblem(prob, prob_func = prob_func)
+  MixedMealModel(EnsembleProblem(prob, prob_func = prob_func), length(fasting_glucose))
+end
+
+# default behavior
+MixedMealModel() = MixedMealModel(75000., 60000., 75., 5.0, 18.0, 1.3, 0.33)
+
+# default ensemble
+MixedMealModel(n_ensembles::Int) = begin 
+  
+  body_mass = shuffle(range(70, 90, n_ensembles))
+  gb = shuffle(range(4.0, 6.5, n_ensembles))
+  ib = shuffle(range(9.0, 18.0, n_ensembles))
+  tgb = shuffle(range(0.9, 2.3, n_ensembles))
+  nefab = shuffle(range(0.25, 0.38, n_ensembles))
+
+  MixedMealModel(
+    repeat([75000.], n_ensembles),
+    repeat([60000.], n_ensembles),
+    body_mass,
+    gb,
+    ib,
+    tgb,
+    nefab
+  )
 end
