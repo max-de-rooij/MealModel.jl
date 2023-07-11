@@ -3,7 +3,8 @@ on:
   push:
     branches:
       - main
-    tags: ['*']
+    tags-ignore: 
+      - quickfix
   pull_request:
 concurrency:
   # Skip intermediate builds: always.
@@ -19,7 +20,6 @@ jobs:
       matrix:
         version:
           - '1.9'
-          - 'nightly'
         os:
           - ubuntu-latest
         arch:
