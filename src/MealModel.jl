@@ -6,7 +6,7 @@ module MealModel
 using OrdinaryDiffEq, SciMLBase
 
 include("model/Model.jl")
-include("simulaton/Simulation.jl")
+include("simulation/Simulation.jl")
 
 # model function
 export MixedMealModel
