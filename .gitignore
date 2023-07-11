@@ -3,3 +3,8 @@
 *.jl.mem
 /docs/Manifest.toml
 /docs/build/
+temp/*
+
+*Manifest.toml*
+
+Manifest.toml
