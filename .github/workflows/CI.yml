@@ -3,7 +3,8 @@ on:
   push:
     branches:
       - main
-    tags: ['*']
+    tags-ignore: 
+      - quickfix
   pull_request:
 concurrency:
   # Skip intermediate builds: always.
