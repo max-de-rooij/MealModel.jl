@@ -1,26 +1,33 @@
 # single-subject loss function
-function setup(model::MixedMealModel{<:ODEProblem}, data<:MealResponseData, Options::AssimilationOptions)
+function setup(model::MixedMealModel{<:ODEProblem}, data::MealResponseData, options::AssimilationOptions)
 
 
   timepoints = [model.prob.tspan[1]:model.prob.tspan[end]...]
   indices = _get_time_indices(data, timepoints)
 
+  # 
+  loss = _generate_loss(model, data, timepoints, indices, options)
 
-  # TODO: find a way to get the parameters in the right format
-  # TODO: finish loss function 
+  # TODO: find a way to get the parameters in the right format (DONE)
+
+  optf = OptimizationFunction(loss, Optimization.AutoZygote())
+
+
+  optprob = OptimizationProblem(optf, options.initial_parameter_values[options.estimated_parameters],lb=options.lower_parameter_bounds, ub=options.upper_parameter_bounds)
+
+  return optprob 
   # TODO: make loss for PartialMealResponse
   # TODO: make losses for EnsembleProblem models with multiple MealResponseData
   # TODO: write setup function with default model options
   # TODO: add warning for non-identifiability if parameter indices and data-type combination is not tested
-
-
-
-
-
-
 end
 
-function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealResponse, timepoints, indices)
+function _copyreplace(initials::AbstractVector{<:Real}, parameters::AbstractVector{<:Real}, indices::AbstractVector{Int})
+  return [i ∉ indices ? initials[i] : parameters[indexin(i, indices)] for i in eachindex(initials)]
+end
+
+
+function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
 
   # obtain the data
   glucose_data = data.glucose.values
@@ -33,6 +40,7 @@ function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealR
 
   function _loss(p)
 
+    parameters = _copyreplace(options.initial_parameter_values, p, options.estimated_parameters)
     outputs = output(model, parameters, timepoints)
 
     glucose_loss = (outputs.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)

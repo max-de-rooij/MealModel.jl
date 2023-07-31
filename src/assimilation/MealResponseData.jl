@@ -5,7 +5,7 @@ struct TimedVector{T<:Real}
   timepoints::AbstractVector{T}
 end
 
-TimedVector(values::AbstractVector{<:Real}, timepoints::AbstractVector{<:Real}) = TimedVector(promote(values, timepoints)...)
+TimedVector(values::AbstractVector{<:Real}, timepoints::AbstractVector{<:Real}) = length(values) == length(timepoints) ? TimedVector(promote(values, timepoints)...) : throw(ErrorException("Values and Timepoints should have equal lengths!"))
 
 
 # complete meal response
@@ -24,12 +24,14 @@ struct PartialMealResponse{T<:Real} <: MealResponseData
   timepoints::AbstractVector{T}
 end
 
-_get_timepoints(args...) = promote(sort(unique([arg.timepoints for arg in args])))
+_get_timepoints(args...) = sort(unique(
+  reduce(vcat, [arg.timepoints for arg in args])
+))
 
 CompleteMealResponse(glucose::TimedVector{<:Real}, insulin::TimedVector{<:Real}, 
   tg::TimedVector{<:Real}, nefa::TimedVector{<:Real}) = begin 
     timepoints = _get_timepoints(glucose, insulin, tg, nefa)
-    CompleteMealResponse(promote(glucose, insulin, tg, nefa, timepoints)...,)
+    CompleteMealResponse(glucose, insulin, tg, nefa, timepoints)
   end
 
 function _get_time_indices(d::CompleteMealResponse, times)
@@ -48,5 +50,5 @@ end
 PartialMealResponse(glucose::TimedVector{<:Real}, insulin::TimedVector{<:Real}, 
   tg::TimedVector{<:Real}) = begin
     timepoints = _get_timepoints(glucose, insulin, tg)
-    PartialMealResponse(promote(glucose, insulin, tg, timepoints)...)
+    PartialMealResponse(glucose, insulin, tg, timepoints)
   end

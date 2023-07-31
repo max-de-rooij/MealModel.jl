@@ -25,3 +25,15 @@ DefaultModelOptions(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg
   parameters(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg_mass, subject_body_mass),
   [0.005, 1e-6,1e-6,1e-6,1e-6,60.,0.005, 1e-6], [0.1,1.,5.,1.,1.,600.,0.1,1.]
 )
+
+DefaultModelOptions(model::MixedMealModel{<:ODEProblem}) = AssimilationOptions(
+  1000, 10, 1e-6, 1e-6, [1,5,6,17,20,21,23,25], 
+  model.prob.p,
+  [0.005, 1e-6,1e-6,1e-6,1e-6,60.,0.005, 1e-6], [0.1,1.,5.,1.,1.,600.,0.1,1.]
+)
+
+ParsimoniousModelOptions(model::MixedMealModel{<:ODEProblem}) = AssimilationOptions(
+  1000, 10, 1e-6, 1e-6, [1, 5, 6, 17, 23], 
+  model.prob.p,
+  [0.005, 1e-6,1e-6,1e-6, 0.005], [0.1,1.,5.,1., 0.1]
+)

@@ -12,7 +12,7 @@ using Test
   @test define_model()
 end
 
-@testset "Singular model definition" begin
+@testset "Singular model simulation" begin
   function run_model_simulation()
 
     model = MixedMealModel()
