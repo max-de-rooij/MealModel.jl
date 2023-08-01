@@ -35,16 +35,16 @@ CompleteMealResponse(glucose::TimedVector{<:Real}, insulin::TimedVector{<:Real},
   end
 
 function _get_time_indices(d::CompleteMealResponse, times)
-  [findall(x -> x ∈ d.glucose.timepoints, times),
+  reduce(vcat, [findall(x -> x ∈ d.glucose.timepoints, times),
    findall(x -> x ∈ d.insulin.timepoints, times),
    findall(x -> x ∈ d.tg.timepoints, times),
-   findall(x -> x ∈ d.nefa.timepoints, times)]
+   findall(x -> x ∈ d.nefa.timepoints, times)])
 end
 
 function _get_time_indices(d::PartialMealResponse, times)
-  [findall(x -> x ∈ d.glucose.timepoints, times),
+  reduce(vcat, [findall(x -> x ∈ d.glucose.timepoints, times),
    findall(x -> x ∈ d.insulin.timepoints, times),
-   findall(x -> x ∈ d.tg.timepoints, times)]
+   findall(x -> x ∈ d.tg.timepoints, times)])
 end
 
 PartialMealResponse(glucose::TimedVector{<:Real}, insulin::TimedVector{<:Real}, 
