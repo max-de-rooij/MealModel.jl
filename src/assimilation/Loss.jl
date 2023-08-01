@@ -13,15 +13,15 @@ function setup(model::MixedMealModel{<:ODEProblem}, data::MealResponseData, opti
   optprob = OptimizationProblem(optf, options.initial_parameter_values[options.estimated_parameters],lb=options.lower_parameter_bounds, ub=options.upper_parameter_bounds)
 
   return optprob 
-  # TODO: make loss for PartialMealResponse (DONE)
-  # TODO: make losses for EnsembleProblem models with multiple MealResponseData
   # TODO: write setup function with default model options
   # TODO: add warning for non-identifiability if parameter indices and data-type combination is not tested
 end
 
+
 function _copyreplace(initials::AbstractVector{<:Real}, parameters::AbstractVector{<:Real}, indices::AbstractVector{Int})
-  return [i ∉ indices ? initials[i] : parameters[indexin(i, indices)][1] for i in eachindex(initials)]
+  return [i ∉ indices ? initials[i] : parameters[findfirst(indices .== i)] for i in eachindex(initials)]
 end
+
 
 
 function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
@@ -104,7 +104,7 @@ function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::PartialMealRe
 
     # Fit error
     scaling_term = maximum(glucose_data)
-    fit_error = scaling_term .* [glucose_loss; insulin_loss; tg_loss; nefa_loss]
+    fit_error = scaling_term .* [glucose_loss; insulin_loss; tg_loss]
 
     # Regularisation terms
 

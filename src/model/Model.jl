@@ -27,7 +27,31 @@ function MixedMealModel(
   p = parameters(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg_mass, subject_body_mass)
 
   return MixedMealModel(ODEProblem{true, SciMLBase.FullSpecialize}(
-    system(), u0, timespan, p
+    system(), u0, timespan, p, sensealg=ForwardDiffSensitivity()
+  ))
+end
+
+# parsimonous model
+function MixedMealModel(
+  meal_glucose_mass::T,
+  meal_tg_mass::T,
+  subject_body_mass::T,
+  fasting_glucose::T,
+  fasting_insulin::T,
+  fasting_TG::T;
+  timespan::Tuple{<:Real, <:Real} = (0., 480.)) where T<:Real
+
+  u0 = [
+    0., fasting_glucose, 0., fasting_insulin, 0., fasting_insulin, fasting_insulin, fasting_insulin, 0.33, 0., 0., 0., fasting_TG
+  ]
+
+  p = parameters(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg_mass, subject_body_mass)
+
+  # set k16 to k11*TGplb*Iplb
+  p[25] = p[17] * fasting_TG * fasting_insulin
+
+  return MixedMealModel(ODEProblem{true, SciMLBase.FullSpecialize}(
+    system(), u0, timespan, p, sensealg=ForwardDiffSensitivity()
   ))
 end
 
@@ -50,14 +74,14 @@ function MixedMealModel(
     parameters(glc, ins, meal_glc, meal_tg, bm) for 
     (glc, ins, meal_glc, meal_tg, bm) in zip(fasting_glucose, fasting_insulin, meal_glucose_mass, meal_tg_mass, subject_body_mass)
   ]
-
+  p = (p, 1)
   prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-      system(), u0[1], timespan, p[1]
+      ensemblesystem(), u0[1], timespan, p
     )
   
   prob_func = let p=p, u0=u0
     (prob, i, rep) -> begin
-      remake(prob, p=p[i], u0=u0[i])
+      remake(prob, p=(p[1], i), u0=u0[i])
     end
   end
 

@@ -20,6 +20,10 @@ function predict(model::MixedMealModel{<:EnsembleProblem}, save_timestep::Real, 
   solve(model.prob, Vern7(), ensemble_mode, saveat=save_timestep, trajectories=model.trajectories)
 end
 
+function predict(model::MixedMealModel{<:EnsembleProblem}, parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, times::AbstractVector{<:Real}, ensemble_mode::SciMLBase.EnsembleAlgorithm)
+  solve(model.prob, Vern7(), ensemble_mode, p=parameters, saveat=times, trajectories=model.trajectories)
+end
+
 function output(model::MixedMealModel{<:ODEProblem}; times::Union{Real, AbstractVector{<:Real}} = 1)
   # predict state variable outputs
   solution = predict(model, times)
@@ -34,6 +38,11 @@ end
 function output(model::MixedMealModel{<:EnsembleProblem}; times::Real = 1, ensemble_mode::SciMLBase.EnsembleAlgorithm = EnsembleSerial())
   solution = predict(model, times, ensemble_mode)
   _compute_output(model.prob, solution)
+end
+
+function output(model::MixedMealModel{<:EnsembleProblem}, parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, times::AbstractVector{<:Real}; ensemble_mode::SciMLBase.EnsembleAlgorithm = EnsembleSerial())
+  solution = predict(model, parameters, times, ensemble_mode)
+  _compute_output()
 end
 
 function _compute_output(parameters::AbstractVector{<:Real}, solution)
@@ -88,7 +97,7 @@ function _compute_output(ensemble::EnsembleProblem, solution)
   for (i, sol) in enumerate(solution)
 
     prob = prob_func(prob, i, 1)
-    parameters = prob.p
+    parameters = prob.p[1][i]
 
     output = _compute_output(parameters, sol)
     push!(outputs, output)
@@ -96,3 +105,15 @@ function _compute_output(ensemble::EnsembleProblem, solution)
 
   return outputs
 end
+
+function _compute_output(parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, solution)
+  outputs = []
+  for (i, sol) in enumerate(solution)
+    parameters = parameters[1][i]
+    output = _compute_output(parameters, sol)
+    push!(outputs, output)
+  end
+
+  return outputs
+end
+

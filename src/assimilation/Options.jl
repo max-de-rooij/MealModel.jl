@@ -1,4 +1,4 @@
-struct AssimilationOptions
+mutable struct AssimilationOptions
 
   # optimizer options
   maximum_iterations::Int
