@@ -1,5 +1,5 @@
 # single-subject loss function
-function setup(model::MixedMealModel{<:ODEProblem}, data::MealResponseData, options::AssimilationOptions)
+function setup(model::ODEProblem, data::MealResponseData, options::AssimilationOptions)
 
 
   timepoints = [model.prob.tspan[1]:model.prob.tspan[end]...]
@@ -22,9 +22,7 @@ function _copyreplace(initials::AbstractVector{<:Real}, parameters::AbstractVect
   return [i ∉ indices ? initials[i] : parameters[findfirst(indices .== i)] for i in eachindex(initials)]
 end
 
-
-
-function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
+function _generate_loss(model::ODEProblem, data::CompleteMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
 
   # obtain the data
   glucose_data = data.glucose.values
@@ -84,7 +82,7 @@ function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealR
   loss
 end
 
-function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::PartialMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
+function _generate_loss(model::ODEProblem, data::PartialMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
 
   # obtain the data
   glucose_data = data.glucose.values

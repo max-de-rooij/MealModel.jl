@@ -1,51 +1,26 @@
-# Predicting in single-subject mode
-function predict(model::MixedMealModel{<:ODEProblem}, parameters::AbstractVector{<:Real}, times::AbstractVector{<:Real})
-  solve(model.prob, Vern7(), p=parameters, tspan=(times[1], times[end]), saveat=times)
+# Predicting
+function predict(prob::ODEProblem, parameters, saveat::AbstractVector{<:Real})
+  _prob = remake(prob, p=parameters, tspan=(saveat[1], saveat[end]))
+  solve(_prob, Tsit5(), saveat=saveat)
 end
 
-function predict(model::MixedMealModel{<:ODEProblem}, parameters::AbstractVector{<:Real}, save_timestep::Real)
-  solve(model.prob, Vern7(), p=parameters, saveat=save_timestep)
-end
+predict(prob::ODEProblem, parameters, saveat::Real) = solve(prob, Tsit5(), p=parameters, saveat=saveat)
+predict(prob::ODEProblem, saveat::Real) = solve(prob, Tsit5(), saveat=saveat)
+predict(prob::ODEProblem, saveat::AbstractVector{<:Real}) = solve(prob, Tsit5(), saveat=saveat)
 
-function predict(model::MixedMealModel{<:ODEProblem}, save_timestep::Real)
-  solve(model.prob, Vern7(), saveat=save_timestep)
-end
-
-function predict(model::MixedMealModel{<:ODEProblem}, times::AbstractVector{<:Real})
-  solve(model.prob, Vern7(), tspan=(times[1], times[end]), saveat=times)
-end
-
-# Predicting in ensemble-mode
-function predict(model::MixedMealModel{<:EnsembleProblem}, save_timestep::Real, ensemble_mode::SciMLBase.EnsembleAlgorithm)
-  solve(model.prob, Vern7(), ensemble_mode, saveat=save_timestep, trajectories=model.trajectories)
-end
-
-function predict(model::MixedMealModel{<:EnsembleProblem}, parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, times::AbstractVector{<:Real}, ensemble_mode::SciMLBase.EnsembleAlgorithm)
-  solve(model.prob, Vern7(), ensemble_mode, p=parameters, saveat=times, trajectories=model.trajectories)
-end
-
-function output(model::MixedMealModel{<:ODEProblem}; times::Union{Real, AbstractVector{<:Real}} = 1)
+# Model outputs
+function output(prob::ODEProblem, parameters; saveat::Union{Real, AbstractVector{<:Real}} = 1)
   # predict state variable outputs
-  solution = predict(model, times)
-  _compute_output(model.prob.p, solution)
-end
-
-function output(model::MixedMealModel{<:ODEProblem}, parameters::AbstractVector{<:Real}; times::Union{Real, AbstractVector{<:Real}} = 1)
-  solution = predict(model, parameters, times)
+  solution = predict(prob, parameters, saveat)
   _compute_output(parameters, solution)
 end
 
-function output(model::MixedMealModel{<:EnsembleProblem}; times::Real = 1, ensemble_mode::SciMLBase.EnsembleAlgorithm = EnsembleSerial())
-  solution = predict(model, times, ensemble_mode)
-  _compute_output(model.prob, solution)
+function output(prob::ODEProblem; saveat::Union{Real, AbstractVector{<:Real}} = 1)
+  solution = predict(prob, saveat)
+  _compute_output(prob.p, solution)
 end
 
-function output(model::MixedMealModel{<:EnsembleProblem}, parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, times::AbstractVector{<:Real}; ensemble_mode::SciMLBase.EnsembleAlgorithm = EnsembleSerial())
-  solution = predict(model, parameters, times, ensemble_mode)
-  _compute_output()
-end
-
-function _compute_output(parameters::AbstractVector{<:Real}, solution)
+function _compute_output(parameters, solution)
 
   states = Array(solution)
   # model input
@@ -88,32 +63,5 @@ function _compute_output(parameters::AbstractVector{<:Real}, solution)
     plasma_TG = states[13, :],
     plasma_NEFA = states[9, :]
     )
-end
-
-function _compute_output(ensemble::EnsembleProblem, solution)
-  prob_func = ensemble.prob_func
-  prob = ensemble.prob
-  outputs = []
-  for (i, sol) in enumerate(solution)
-
-    prob = prob_func(prob, i, 1)
-    parameters = prob.p[1][i]
-
-    output = _compute_output(parameters, sol)
-    push!(outputs, output)
-  end
-
-  return outputs
-end
-
-function _compute_output(parameters::Tuple{<:AbstractVector{<:AbstractVector{<:Real}}, Int}, solution)
-  outputs = []
-  for (i, sol) in enumerate(solution)
-    parameters = parameters[1][i]
-    output = _compute_output(parameters, sol)
-    push!(outputs, output)
-  end
-
-  return outputs
 end
 

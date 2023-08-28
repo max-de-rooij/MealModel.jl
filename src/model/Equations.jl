@@ -1,9 +1,9 @@
-function _meal_appearance(σ, k, t, M)
+function meal_appearance(σ, k, t, M)
   σ*(k^σ)*t^(σ-1) * exp(-1*(k*t)^σ) * M
 end
 
 function glucose_meal_appearance(σ, k, t, M, k2, g_gut)
-  glucose_from_meal = _meal_appearance(σ, k, t, M)
+  glucose_from_meal = meal_appearance(σ, k, t, M)
   intestinal_absorption = k2 * g_gut
   
   glucose_from_meal - intestinal_absorption
@@ -37,10 +37,8 @@ function plasma_glucose_flux(VG, BW, fI, fG, c1, G_threshold_pl, p, u)
   G_idp = utilization_rate * u[5]
 
   # Renal excretion of excess glucose
-  glomerular_filtration = glomerular_filtration_rate * distribution_volume_correction * (u[2] - renal_threshold)
-  renal_excretion_switch = u[2] > renal_threshold
-  G_ren = glomerular_filtration * renal_excretion_switch
-
+  G_ren = glomerular_filtration_rate * distribution_volume_correction * (u[2] - renal_threshold) * (u[2] > renal_threshold)
+  
   G_liver + G_gut - G_iid - G_idp - G_ren
 end
 
@@ -50,7 +48,7 @@ function plasma_insulin_flux(fI, tau_i, tau_d, p, u, du)
   # Pancreas
   proportional = p[6] * (u[2] - p[13])
   integral = (p[7]/tau_i) * (u[3] + p[13])
-  derivative = (p[8]/tau_d) * du[2]
+  derivative = (p[8]*tau_d) * du[2]
   I_pnc = unit_conversion_glucose_insulin * (proportional + integral + derivative)
 
   # Liver insulin degradation (maintain steady-state)
@@ -134,68 +132,17 @@ function system()
     du[5] = interstitial_insulin_flux(p, u)
 
     # Insulin delays for NEFA_pl
-    du[6:8] = 3/p[21] .* [u[4] - u[6], u[6] - u[7], u[7] - u[8]]
+    du[6] = 3/p[21] * (u[4] - u[6])
+    du[7] = 3/p[21] * (u[6] - u[7])
+    du[8] = 3/p[21] * (u[7] - u[8])
    
     # plasma NEFA
     du[9] = plasma_nefa_flux(p, u)
 
     # Gut TG
-    du[10] = _meal_appearance(p[11], p[22], t, mTG) - p[23] * u[10]
-    du[11:12] = p[23] .* [(u[10] - u[11]), (u[11] - u[12])]
-
-    # plasma TG
-    du[13] = plasma_tg_flux(VTG, BW, fTG, p, u)
-  end
-
-  return equations!
-end
-
-function ensemblesystem()
-  # model input
-  fG = 0.005551
-  fTG = 0.00113
-  fI = 1.
-  tau_i = 31.
-  tau_d = 3.
-  G_threshold_pl = 9.
-  c1 = 0.1
-  
-  equations! = function(du, u, ptot, t)
-
-    # subject selection
-    idx = ptot[2]
-    p = ptot[1][idx]
-
-    mG = p[26]
-    mTG = p[27]
-    BW = p[28]
-
-    VG = (260/sqrt(BW/70))/1000
-    VTG = (70/sqrt(BW/70))/1000
-    # glucose appearance from the meal
-    du[1] = glucose_meal_appearance(p[11], p[1], t, mG, p[2], u[1]) 
-
-    # glucose in the plasma
-    du[2] = plasma_glucose_flux(VG, BW, fI, fG, c1, G_threshold_pl, p, u)
-
-    # PID Integrator equation
-    du[3] = u[2] - p[13]
-
-    # insulin in the plasma
-    du[4] = plasma_insulin_flux(fI, tau_i, tau_d, p, u, du)
-
-    # Insulin in the interstitial fluid
-    du[5] = interstitial_insulin_flux(p, u)
-
-    # Insulin delays for NEFA_pl
-    du[6:8] = 3/p[21] .* [u[4] - u[6], u[6] - u[7], u[7] - u[8]]
-    
-    # plasma NEFA
-    du[9] = plasma_nefa_flux(p, u)
-
-    # Gut TG
-    du[10] = _meal_appearance(p[11], p[22], t, mTG) - p[23] * u[10]
-    du[11:12] = p[23] .* [(u[10] - u[11]), (u[11] - u[12])]
+    du[10] = meal_appearance(p[11], p[22], t, mTG) - p[23] * u[10]
+    du[11] = p[23] * (u[10] - u[11])
+    du[12] = p[23] * (u[11] - u[12])
 
     # plasma TG
     du[13] = plasma_tg_flux(VTG, BW, fTG, p, u)
