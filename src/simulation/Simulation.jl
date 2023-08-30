@@ -20,6 +20,9 @@ function output(prob::ODEProblem; saveat::Union{Real, AbstractVector{<:Real}} = 
   _compute_output(prob.p, solution)
 end
 
+output(model::MixedMealModel, parameters; saveat::Union{Real, AbstractVector{<:Real}} = 1) = output(model.prob, parameters; saveat = saveat)
+output(model::MixedMealModel; saveat::Union{Real, AbstractVector{<:Real}} = 1) = output(model.prob; saveat = saveat)
+
 function _compute_output(parameters, solution)
 
   states = Array(solution)
