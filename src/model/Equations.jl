@@ -1,5 +1,13 @@
+using SpecialFunctions
+
 function meal_appearance(σ, k, t, M)
-  σ*(k^σ)*t^(σ-1) * exp(-1*(k*t)^σ) * M
+  #σ*(k^σ)*t^(σ-1) * exp(-1*(k*t)^σ) * M
+  (k^σ)*t^(σ-1) * exp(-1*(k*t)) * M * (1/gamma(σ))
+end
+
+function meal_appearance(σ, k, t, M, tMeal)
+  t̂ = (t ≥ tMeal) * (t - tMeal)
+  meal_appearance(σ, k, t̂, M)
 end
 
 function glucose_meal_appearance(σ, k, t, M, k2, g_gut)
@@ -8,6 +16,14 @@ function glucose_meal_appearance(σ, k, t, M, k2, g_gut)
   
   glucose_from_meal - intestinal_absorption
 end
+
+function glucose_meal_appearance(σ, k, t, M, k2, g_gut, meal_times)
+  glucose_from_meal = sum(meal_appearance(σ,k,t,M[i],tMeal) for (i, tMeal) in enumerate(meal_times))
+  intestinal_absorption = k2 * g_gut
+  
+  glucose_from_meal - intestinal_absorption
+end
+
 
 function plasma_glucose_flux(VG, BW, fI, fG, c1, G_threshold_pl, p, u)
 
@@ -150,3 +166,59 @@ function system()
 
   return equations!
 end
+
+function system(meal_times)
+    # model input
+    fG = 0.005551
+    fTG = 0.00113
+    fI = 1.
+    tau_i = 31.
+    tau_d = 3.
+    G_threshold_pl = 9.
+    c1 = 0.1
+    
+    nMeals = length(meal_times)
+
+    equations! = function(du, u, p, t)
+      
+      
+      mG = p[26:25+nMeals]
+      mTG = p[26+nMeals:25+2*nMeals]
+      BW = p[end]
+  
+      VG = (260/sqrt(BW/70))/1000
+      VTG = (70/sqrt(BW/70))/1000
+      # glucose appearance from the meal
+      du[1] = glucose_meal_appearance(p[11], p[1], t, mG, p[2], u[1], meal_times) 
+  
+      # glucose in the plasma
+      du[2] = plasma_glucose_flux(VG, BW, fI, fG, c1, G_threshold_pl, p, u)
+  
+      # PID Integrator equation
+      du[3] = u[2] - p[13]
+  
+      # insulin in the plasma
+      du[4] = plasma_insulin_flux(fI, tau_i, tau_d, p, u, du)
+  
+      # Insulin in the interstitial fluid
+      du[5] = interstitial_insulin_flux(p, u)
+  
+      # Insulin delays for NEFA_pl
+      du[6] = 3/p[21] * (u[4] - u[6])
+      du[7] = 3/p[21] * (u[6] - u[7])
+      du[8] = 3/p[21] * (u[7] - u[8])
+     
+      # plasma NEFA
+      du[9] = plasma_nefa_flux(p, u)
+  
+      # Gut TG
+      du[10] = sum(meal_appearance(p[11], p[22], t, mTG[i], tMeal) for (i,tMeal) in enumerate(meal_times)) - p[23] * u[10]
+      du[11] = p[23] * (u[10] - u[11])
+      du[12] = p[23] * (u[11] - u[12])
+  
+      # plasma TG
+      du[13] = plasma_tg_flux(VTG, BW, fTG, p, u)
+    end
+  
+    return equations!
+  end
