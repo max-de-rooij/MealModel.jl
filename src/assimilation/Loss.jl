@@ -1,138 +1,144 @@
 # single-subject loss function
-function setup(model::MixedMealModel{<:ODEProblem}, data::MealResponseData, options::AssimilationOptions)
 
+function make_predictor(model::MixedMealModel)
 
-  timepoints = [model.prob.tspan[1]:model.prob.tspan[end]...]
-  indices = _get_time_indices(data, timepoints)
+  fixed_parameter_filter = [i ∉ model.estimated_parameters for i in eachindex(model.prob.p)]
+  fixed_parameters = model.prob.p[fixed_parameter_filter]
+  fixed_parameter_indices = eachindex(model.prob.p)[fixed_parameter_filter]
+  order = sortperm([fixed_parameter_indices; model.estimated_parameters])
+  
+  function _predict(p, save_timestep = 0.5)
+    full_parameter_vector = [fixed_parameters; p][order]
+    #_prob = remake(model.prob, p=full_parameter_vector)
+    output(model.prob, full_parameter_vector, model.prob.tspan[1]:save_timestep:model.prob.tspan[end])
+  end
 
-  loss = _generate_loss(model, data, timepoints, indices, options)
-
-  optf = OptimizationFunction(loss, Optimization.AutoZygote())
-
-
-  optprob = OptimizationProblem(optf, options.initial_parameter_values[options.estimated_parameters],lb=options.lower_parameter_bounds, ub=options.upper_parameter_bounds)
-
-  return optprob 
-  # TODO: make loss for PartialMealResponse (DONE)
-  # TODO: make losses for EnsembleProblem models with multiple MealResponseData
-  # TODO: write setup function with default model options
-  # TODO: add warning for non-identifiability if parameter indices and data-type combination is not tested
+  return _predict
 end
 
-function _copyreplace(initials::AbstractVector{<:Real}, parameters::AbstractVector{<:Real}, indices::AbstractVector{Int})
-  return [i ∉ indices ? initials[i] : parameters[indexin(i, indices)][1] for i in eachindex(initials)]
-end
+function make_loss(model::MixedMealModel, error::Function; save_timestep = 0.5)
 
-
-function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::CompleteMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
-
-  # obtain the data
-  glucose_data = data.glucose.values
-  insulin_data = data.insulin.values
-  tg_data = data.tg.values
-  nefa_data = data.nefa.values
-
-  fasting_nefa = model.prob.u0[9]
-  fasting_tg = model.prob.u0[13]
+  fixed_parameter_filter = [i ∉ model.estimated_parameters for i in eachindex(model.prob.p)]
+  fixed_parameters = model.prob.p[fixed_parameter_filter]
+  fixed_parameter_indices = eachindex(model.prob.p)[fixed_parameter_filter]
+  order = sortperm([fixed_parameter_indices; model.estimated_parameters])
 
   function _loss(p)
+    full_parameter_vector = [fixed_parameters; p][order]
+    #_prob = remake(model.prob, p=full_parameter_vector)
+    model_output = output(model.prob, full_parameter_vector; saveat=save_timestep)
+    error(model_output, full_parameter_vector)
+  end
 
-    parameters = _copyreplace(options.initial_parameter_values, p, options.estimated_parameters)
-    outputs = output(model, parameters; times = timepoints)
+  _loss
+end
 
-    glucose_loss = (outputs.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)
-    insulin_loss = (outputs.plasma_insulin[indices[2]] .- insulin_data)/maximum(insulin_data)
-    tg_loss = (outputs.plasma_TG[indices[3]] .- tg_data)/maximum(tg_data)
-    nefa_loss = (outputs.plasma_NEFA[indices[4]] .- nefa_data)/maximum(nefa_data)
+function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, insulin_data, insulin_timepoints, tg_data, tg_timepoints, nefa_data, nefa_timepoints; save_timestep = 0.5)
+
+  # times
+  times = model.prob.tspan[1]:save_timestep:model.prob.tspan[end]
+
+  # obtain timepoints
+  indices = [
+    findall(x -> x ∈ glucose_timepoints, times),
+    findall(x -> x ∈ insulin_timepoints, times),
+    findall(x -> x ∈ tg_timepoints, times),
+    findall(x -> x ∈ nefa_timepoints, times)]
+
+  _glucose_reg_time = times[times .<= 240]
+  _tg_reg_time = times[times .<= 480]
+  
+  function _error(model_output, parameters)
+
+    # Data loss
+    glucose_loss = (model_output.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)
+    insulin_loss = (model_output.plasma_insulin[indices[2]] .- insulin_data)/maximum(insulin_data)
+    tg_loss = (model_output.plasma_TG[indices[3]] .- tg_data)/maximum(tg_data)
+    nefa_loss = (model_output.plasma_NEFA[indices[4]] .- nefa_data)/maximum(nefa_data)
 
     # Fit error
     scaling_term = maximum(glucose_data)
     fit_error = scaling_term .* [glucose_loss; insulin_loss; tg_loss; nefa_loss]
 
-    # Regularisation terms
+    # Regularisation
 
-    # error if AUC of roc of gut glucose < meal content
-    AUC_G = sum(outputs.glucose_gut_to_plasma_flux[2:239]) + 0.5 * (outputs.glucose_gut_to_plasma_flux[1] + outputs.glucose_gut_to_plasma_flux[240])
-    err_AUC_G = abs(AUC_G - parameters[26])/10000
-
-    # error if AUC of roc of TG in plasma < meal content
-    AUC_TG = sum(outputs.tg_gut_to_plasma_flux[2:479]) + 0.5 * (outputs.tg_gut_to_plasma_flux[1] + outputs.tg_gut_to_plasma_flux[480])
-    err_AUC_TG = abs(AUC_TG - parameters[27])/10000
+    VG = (260/sqrt(parameters[28]/70))/1000
+    VTG = (70/sqrt(parameters[28]/70))/1000
+    fG = 0.005551
+    fTG = 0.00113
     
-    # constrain steady state G to measured fasting value
-    G_steady_state = parameters[13] - outputs.plasma_glucose[301]
+    AUC_G_norm = trapz(_glucose_reg_time,model_output.glucose_gut_to_plasma_flux[times .<= 240]) * (VG*parameters[28])/fG
+    err_AUC_G = abs(AUC_G_norm-parameters[26])/10_000
 
-    # constrain steady state TG to measured fasting value
-    TG_steady_state = fasting_tg - outputs.plasma_TG[481]
+    AUC_TG_norm = trapz(_tg_reg_time,model_output.tg_gut_to_plasma_flux[times .<= 480]) * (VTG*parameters[28])/fTG
+    err_AUC_TG = abs(AUC_TG_norm-parameters[27])/10_000
 
-    # constrain steady state NEFA to measured fasting value
-    model_fasting_NEFA = (3 *(parameters[16]/100)*parameters[17]*fasting_tg*parameters[14] + (parameters[18]/(1 +parameters[19]*(parameters[14]^2))))/parameters[20]
-    NEFA_diff = fasting_nefa - model_fasting_NEFA
+    G_steady_state = parameters[13] - model_output.plasma_glucose[times .== 300][1]
 
-    # non-negative VLDL flux
-    VLDL_nonneg = sum(abs2, min.(0, outputs.hepatic_tg_flux))
+    TG_steady_state = tg_data[1] - model_output.plasma_TG[times .== 720][1]
 
-    # Regularisation error
+    model_fasting_NEFA = (3 *(parameters[16]/100)*parameters[17]*tg_data[1]*parameters[14] + (parameters[18]/(1 +parameters[19]*(parameters[14]^2))))/parameters[20]
+    NEFA_diff = nefa_data[1] - model_fasting_NEFA
+
+    VLDL_nonneg = sum(abs2, min.(0, model_output.hepatic_tg_flux))
+
     regularisation_error = [err_AUC_G, err_AUC_TG, G_steady_state, VLDL_nonneg, TG_steady_state, 8*NEFA_diff]
 
     # Combined Loss Value
     sum(abs2, [fit_error; regularisation_error])
   end
 
-  loss(x, p) = _loss(x)
-
-  loss
+  return _error
 end
 
-function _generate_loss(model::MixedMealModel{<:ODEProblem}, data::PartialMealResponse, timepoints::AbstractVector{<:Real}, indices::AbstractVector{Int}, options::AssimilationOptions)
+function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, insulin_data, insulin_timepoints, tg_data, tg_timepoints; save_timestep = 0.5)
+  # times
+  times = model.prob.tspan[1]:save_timestep:model.prob.tspan[end]
 
-  # obtain the data
-  glucose_data = data.glucose.values
-  insulin_data = data.insulin.values
-  tg_data = data.tg.values
+  # obtain timepoints
+  indices = [
+    findall(x -> x ∈ glucose_timepoints, times),
+    findall(x -> x ∈ insulin_timepoints, times),
+    findall(x -> x ∈ tg_timepoints, times)]
 
-  fasting_tg = model.prob.u0[13]
+  _glucose_reg_time = times[times .<= 240]
+  _tg_reg_time = times[times .<= 480]
+  
+  function _error(model_output, parameters, ::Any)
 
-  function _loss(p)
-
-    parameters = _copyreplace(options.initial_parameter_values, p, options.estimated_parameters)
-    outputs = output(model, parameters; times = timepoints)
-
-    glucose_loss = (outputs.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)
-    insulin_loss = (outputs.plasma_insulin[indices[2]] .- insulin_data)/maximum(insulin_data)
-    tg_loss = (outputs.plasma_TG[indices[3]] .- tg_data)/maximum(tg_data)
+    # Data loss
+    glucose_loss = (model_output.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)
+    insulin_loss = (model_output.plasma_insulin[indices[2]] .- insulin_data)/maximum(insulin_data)
+    tg_loss = (model_output.plasma_TG[indices[3]] .- tg_data)/maximum(tg_data)
 
     # Fit error
     scaling_term = maximum(glucose_data)
-    fit_error = scaling_term .* [glucose_loss; insulin_loss; tg_loss; nefa_loss]
+    fit_error = scaling_term .* [glucose_loss; insulin_loss; tg_loss]
 
-    # Regularisation terms
+    # Regularisation
 
-    # error if AUC of roc of gut glucose < meal content
-    AUC_G = sum(outputs.glucose_gut_to_plasma_flux[2:239]) + 0.5 * (outputs.glucose_gut_to_plasma_flux[1] + outputs.glucose_gut_to_plasma_flux[240])
-    err_AUC_G = abs(AUC_G - parameters[26])/10000
-
-    # error if AUC of roc of TG in plasma < meal content
-    AUC_TG = sum(outputs.tg_gut_to_plasma_flux[2:479]) + 0.5 * (outputs.tg_gut_to_plasma_flux[1] + outputs.tg_gut_to_plasma_flux[480])
-    err_AUC_TG = abs(AUC_TG - parameters[27])/10000
+    VG = (260/sqrt(parameters[28]/70))/1000
+    VTG = (70/sqrt(parameters[28]/70))/1000
+    fG = 0.005551
+    fTG = 0.00113
     
-    # constrain steady state G to measured fasting value
-    G_steady_state = parameters[13] - outputs.plasma_glucose[301]
+    AUC_G_norm = trapz(_glucose_reg_time,model_output.glucose_gut_to_plasma_flux[times .<= 240]) * (VG*parameters[28])/fG
+    err_AUC_G = abs(AUC_G_norm-parameters[26])/10_000
 
-    # constrain steady state TG to measured fasting value
-    TG_steady_state = fasting_tg - outputs.plasma_TG[481]
+    AUC_TG_norm = trapz(_tg_reg_time,model_output.tg_gut_to_plasma_flux[times .<= 480]) * (VTG*parameters[28])/fTG
+    err_AUC_TG = abs(AUC_TG_norm-parameters[27])/10_000
 
-    # non-negative VLDL flux
-    VLDL_nonneg = sum(abs2, min.(0, outputs.hepatic_tg_flux))
+    G_steady_state = parameters[13] - model_output.plasma_glucose[times .== 300][1]
 
-    # Regularisation error
+    TG_steady_state = tg_data[1] - model_output.plasma_TG[times .== 720][1]
+
+    VLDL_nonneg = sum(abs2, min.(0, model_output.hepatic_tg_flux))
+
     regularisation_error = [err_AUC_G, err_AUC_TG, G_steady_state, VLDL_nonneg, TG_steady_state]
 
     # Combined Loss Value
     sum(abs2, [fit_error; regularisation_error])
   end
 
-  loss(x, p) = _loss(x)
-
-  loss
+  return _error
 end
