@@ -33,6 +33,9 @@ function make_loss(model::MixedMealModel, error::Function; save_timestep = 0.5)
   _loss
 end
 
+make_loss(model::MixedMealModel, data...; save_timestep = 0.5) = make_loss(model, make_error(
+  model, data...; save_timestep = save_timestep); save_timestep = save_timestep)
+
 function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, insulin_data, insulin_timepoints, tg_data, tg_timepoints, nefa_data, nefa_timepoints; save_timestep = 0.5)
 
   # times

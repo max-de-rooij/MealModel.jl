@@ -5,7 +5,6 @@ using Trapz
 
 include("model/Model.jl")
 include("simulation/Simulation.jl")
-include("assimilation/Assimilation.jl")
 
 # model constructor
 export MixedMealModel
