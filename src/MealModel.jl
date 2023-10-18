@@ -2,9 +2,12 @@ module MealModel
 using OrdinaryDiffEq, SciMLBase, SciMLSensitivity, Optimization
 using ComponentArrays
 using Trapz
+using LatinHypercubeSampling
+using Random
 
 include("model/Model.jl")
 include("simulation/Simulation.jl")
+include("assimilation/Assimilation.jl")
 
 # model constructor
 export MixedMealModel
@@ -16,7 +19,7 @@ export meal_appearance, glucose_meal_appearance, plasma_glucose_flux, plasma_ins
 export predict, output
 
 # assimilation related functions
-export make_predictor, make_loss, make_error
+export make_predictor, make_loss, make_error, perform_preselection, create_full_parameter_vector
 
 end
 

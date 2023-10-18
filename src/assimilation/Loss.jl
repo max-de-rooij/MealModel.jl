@@ -52,7 +52,7 @@ function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, ins
   _tg_reg_time = times[times .<= 480]
   
   function _error(model_output, parameters)
-
+  
     # Data loss
     glucose_loss = (model_output.plasma_glucose[indices[1]] .- glucose_data)/maximum(glucose_data)
     insulin_loss = (model_output.plasma_insulin[indices[2]] .- insulin_data)/maximum(insulin_data)

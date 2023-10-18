@@ -1,15 +1,27 @@
 using SpecialFunctions
 
+"""
+Meal Apprearance function of glucose or TG into the gut, using Mδ(t) as an input for stacked delays of depth σ and 
+  rate coefficient k.
+"""
 function meal_appearance(σ, k, t, M)
-  #σ*(k^σ)*t^(σ-1) * exp(-1*(k*t)^σ) * M
+  # σ*(k^σ)*t^(σ-1) * exp(-1*(k*t)^σ) * M (change the line blow to this for the original meal model function)
   (k^σ)*t^(σ-1) * exp(-1*(k*t)) * M * (1/gamma(σ))
 end
 
+"""
+Meal Apprearance function of glucose or TG into the gut, using Mδ(t-tMeal) as an input for stacked delays of depth σ and 
+rate coefficient k.
+"""
 function meal_appearance(σ, k, t, M, tMeal)
   t̂ = (t ≥ tMeal) * (t - tMeal)
   meal_appearance(σ, k, t̂, M)
 end
 
+"""
+Glucose flux in the gut, which is the difference of the appearance from a meal at time t=0, and absorption from the 
+intestine into the blood plasma, with rate k2.
+"""
 function glucose_meal_appearance(σ, k, t, M, k2, g_gut)
   glucose_from_meal = meal_appearance(σ, k, t, M)
   intestinal_absorption = k2 * g_gut
@@ -17,6 +29,10 @@ function glucose_meal_appearance(σ, k, t, M, k2, g_gut)
   glucose_from_meal - intestinal_absorption
 end
 
+"""
+Glucose flux in the gut, which is the difference of the appearance from a meal at time t=tMeal, and absorption from the 
+intestine into the blood plasma, with rate k2.
+"""
 function glucose_meal_appearance(σ, k, t, M, k2, g_gut, meal_times)
   glucose_from_meal = sum(meal_appearance(σ,k,t,M[i],tMeal) for (i, tMeal) in enumerate(meal_times))
   intestinal_absorption = k2 * g_gut
@@ -24,7 +40,14 @@ function glucose_meal_appearance(σ, k, t, M, k2, g_gut, meal_times)
   glucose_from_meal - intestinal_absorption
 end
 
-
+"""
+Glucose flux in the blood plasma compartment. The flux consists of five components:
+  1. Liver: endogenous glucose production, inhibited by glucose and insulin concentrations above baseline
+  2. Gut: glucose appearance from the gut compartment
+  3. Insulin-independent utilization: glucose absorption into tissue, independent from insulin concentrations (brain)
+  4. Insulin-dependent utilization: glucose absorption into tissue, dependent on insulin concentrations
+  5. Renal: glucose excretion through the kidneys if the plasma concentration becomes large (Gpl > 9)
+"""
 function plasma_glucose_flux(VG, BW, fI, fG, c1, G_threshold_pl, p, u)
 
   # Constants
