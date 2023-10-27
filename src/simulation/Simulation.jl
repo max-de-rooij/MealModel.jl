@@ -9,18 +9,57 @@ predict(prob::ODEProblem, saveat::Real) = solve(prob, Tsit5(), saveat=saveat)
 predict(prob::ODEProblem, saveat::AbstractVector{<:Real}) = solve(prob, Tsit5(), saveat=saveat)
 
 # Model outputs
+"""
+Compute the model outputs.
+
+Arguments:
+  * `prob` : `ODEProblem` object describing the system of equations
+  * `parameters` : parameter vector
+
+Keyword arguments:
+  * `saveat = 1` : `Real` containing the save timestep, or `Vector` containing the times at which to save the solution
+"""
 function output(prob::ODEProblem, parameters; saveat::Union{Real, AbstractVector{<:Real}} = 1)
   # predict state variable outputs
   solution = predict(prob, parameters, saveat)
   _compute_output(parameters, solution)
 end
 
+"""
+Compute the model outputs.
+
+Arguments:
+  * `prob` : `ODEProblem` object describing the system of equations
+
+Keyword arguments:
+  * `saveat = 1` : `Real` containing the save timestep, or `Vector` containing the times at which to save the solution
+"""
 function output(prob::ODEProblem; saveat::Union{Real, AbstractVector{<:Real}} = 1)
   solution = predict(prob, saveat)
   _compute_output(prob.p, solution)
 end
 
+"""
+Compute the model outputs.
+
+Arguments:
+  * `model` : `MixedMealModel` object describing the model
+  * `parameters` : parameter vector
+
+Keyword arguments:
+  * `saveat = 1` : `Real` containing the save timestep, or `Vector` containing the times at which to save the solution
+"""
 output(model::MixedMealModel, parameters; saveat::Union{Real, AbstractVector{<:Real}} = 1) = output(model.prob, parameters; saveat = saveat)
+
+"""
+Compute the model outputs.
+
+Arguments:
+  * `model` : `MixedMealModel` object describing the model
+
+Keyword arguments:
+  * `saveat = 1` : `Real` containing the save timestep, or `Vector` containing the times at which to save the solution
+"""
 output(model::MixedMealModel; saveat::Union{Real, AbstractVector{<:Real}} = 1) = output(model.prob; saveat = saveat)
 
 function _compute_output(parameters, solution)

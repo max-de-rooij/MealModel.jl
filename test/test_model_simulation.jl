@@ -14,7 +14,7 @@ end
 
 @testset let model=MixedMealModel()
   
-  prediction = (m) -> begin predict(m, 1); return true; end
+  prediction = (m) -> begin predict(m.prob, 1); return true; end
   obtain_output = (m) -> begin output(m); return true; end
 
   @test prediction(model)

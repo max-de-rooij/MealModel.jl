@@ -16,6 +16,23 @@ function make_predictor(model::MixedMealModel)
   return _predict
 end
 
+"""
+Make a loss function for optimization.
+
+Arguments:
+* `model` : model as `MixedMealModel` object
+* `data...` : Measured data in one of the following combinations:
+  * `glucose_data`, `glucose_timepoints` for CGM
+  * `glucose_data`, `glucose_timepoints`, `insulin_data`, `insulin_timepoints`, `tg_data`, `tg_timepoints`
+  * `glucose_data`, `glucose_timepoints`, `insulin_data`, `insulin_timepoints`, `tg_data`, `tg_timepoints`, `nefa_data`, `nefa_timepoints`
+
+Keyword arguments:
+* `save_timestep` = 0.5 : save timestep to use for computing the regularisation errors. Smaller timesteps mean more memory but more accurate AUC computation. 
+Values smaller than 0.5 (default) have no significant additional benefit for the parameter estimation.
+"""
+make_loss(model::MixedMealModel, data...; save_timestep = 0.5) = make_loss(model, make_error(
+  model, data...; save_timestep = save_timestep); save_timestep = save_timestep)
+
 function make_loss(model::MixedMealModel, error::Function; save_timestep = 0.5)
 
   fixed_parameter_filter = [i ∉ model.estimated_parameters for i in eachindex(model.prob.p)]
@@ -33,8 +50,6 @@ function make_loss(model::MixedMealModel, error::Function; save_timestep = 0.5)
   _loss
 end
 
-make_loss(model::MixedMealModel, data...; save_timestep = 0.5) = make_loss(model, make_error(
-  model, data...; save_timestep = save_timestep); save_timestep = save_timestep)
 
 function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, insulin_data, insulin_timepoints, tg_data, tg_timepoints, nefa_data, nefa_timepoints; save_timestep = 0.5)
 
@@ -141,6 +156,39 @@ function make_error(model::MixedMealModel, glucose_data, glucose_timepoints, ins
 
     # Combined Loss Value
     sum(abs2, [fit_error; regularisation_error])
+  end
+
+  return _error
+end
+
+function make_error(model::MixedMealModel, glucose_data, glucose_timepoints; save_timestep = 0.5)
+  # times
+  times = model.prob.tspan[1]:save_timestep:model.prob.tspan[end]
+
+  # obtain timepoints
+  indices = findall(x -> x ∈ glucose_timepoints, times)
+
+  _glucose_reg_time = times[times .<= 240]
+  
+  function _error(model_output, parameters, ::Any)
+
+    # Data loss
+    glucose_loss = model_output.plasma_glucose[indices[1]] .- glucose_data
+
+    # Regularisation
+
+    VG = (260/sqrt(parameters[28]/70))/1000
+    fG = 0.005551
+    
+    AUC_G_norm = trapz(_glucose_reg_time,model_output.glucose_gut_to_plasma_flux[times .<= 240]) * (VG*parameters[28])/fG
+    err_AUC_G = abs(AUC_G_norm-parameters[26])/10_000
+
+    G_steady_state = parameters[13] - model_output.plasma_glucose[times .== 300][1]
+
+    regularisation_error = [err_AUC_G, G_steady_state]
+
+    # Combined Loss Value
+    sum(abs2, [glucose_loss; regularisation_error])
   end
 
   return _error
