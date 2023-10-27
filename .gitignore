@@ -9,3 +9,6 @@ temp/*
 
 Manifest.toml
 .DS_Store
+
+# private data
+data/private*
